@@ -1,0 +1,12 @@
+{
+  "name": "home-check-card",
+  "version": "1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/home-check-card.js && node --check dist/home-check-card.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
