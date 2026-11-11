@@ -1,5 +1,5 @@
 /**
- * Home Check Card — Home Assistant dashboard card. Version 1.0
+ * Home Check Card — Home Assistant dashboard card. Version 1.1
  * Copyright (c) 2026 luigi-regolo. SPDX-License-Identifier: GPL-3.0-only.
  * Read-only: the card never sends commands.
  * No external scripts, fonts, analytics or assets.
@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.0';
+  const VERSION = '1.1';
   const TAG = 'home-check-card';
   const EDITOR_TAG = 'home-check-card-editor';
 
