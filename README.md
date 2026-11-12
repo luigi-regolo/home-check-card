@@ -78,7 +78,7 @@ All options are set from the visual editor. The table lists the field names save
 | `show_eyebrow` / `show_title` | Show or hide the label and the title. |
 | `theme_mode` | `auto`, `light`, or `dark`. |
 | `max_rows` | Visible items to fix, from 1 to 5. On phones the card shows at most 2. |
-| `row_tap` | Tapping a row opens the entity details. Enabled by default. |
+| `row_tap` | Tapping a row of the details popup opens the entity details. Enabled by default. The rows of the main card are informational only. |
 | `row_actions` | Switch-off buttons on the rows of the popup. Enabled by default. |
 | `bulk_action` | **Switch off all** button, with confirmation. Enabled by default. It does not include covers. |
 | `cover_close` | **Close** button for covers. Disabled by default. |

@@ -1,5 +1,5 @@
 /**
- * Home Check Card — Home Assistant dashboard card. Version 1.4
+ * Home Check Card — Home Assistant dashboard card. Version 1.6
  * Copyright (c) 2026 luigi-regolo. SPDX-License-Identifier: GPL-3.0-only.
  * Quick actions are optional: turn off lights, TVs and plugs, close covers, arm or disarm the alarm with a code. Locks are never commanded.
  * No external scripts, fonts, analytics or assets.
@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.4';
+  const VERSION = '1.6';
   const TAG = 'home-check-card';
   const EDITOR_TAG = 'home-check-card-editor';
 
@@ -316,9 +316,6 @@
 .hc-ico{width:32px;height:32px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--hc-circle);--is:18px}
 .hc-row{min-height:50px;box-sizing:border-box}
 .hc-ph{visibility:hidden;pointer-events:none}
-.hc-ract{padding:6px 8px 6px 10px}
-.hc-rmain{display:flex;flex:1;align-items:center;gap:10px;min-width:0;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left}
-.hc button.hc-rmain{cursor:pointer}
 .hc-row[data-lv="warn"] .hc-ico{background:var(--hc-warn-bg);box-shadow:inset 0 0 0 1px var(--hc-warn-bd);color:var(--hc-warn-fg)}
 .hc-row[data-lv="crit"] .hc-ico{background:var(--hc-crit-bg);box-shadow:inset 0 0 0 1px var(--hc-crit-bd);color:var(--hc-crit-fg)}
 .hc-row[data-lv="unk"] .hc-ico{border:1.5px dashed var(--hc-idle);color:var(--hc-muted)}
@@ -513,21 +510,10 @@
 
     /* ---- markup ---- */
     _rowHTML(c) {
-      const panel = c.kind === 'alarm' && this._cfg.alarm_panel && c.entity_id;
-      const tap = panel || (this._cfg.row_tap && c.entity_id);
-      const act = this._actFor(c);
-      if (act) {
-        const st = this._pend[c.entity_id] || '';
-        const lab = st === 'busy' ? 'Invio…' : st === 'fail' ? 'Riprova' : act.label;
-        const mt = tap ? 'button type="button" data-entity="' + esc(c.entity_id) + '" data-focus="r-' + esc(c.entity_id) + '"' : 'div', me = tap ? 'button' : 'div';
-        return '<div class="hc-row hc-ract" data-lv="' + c.lv + '"><' + mt + ' class="hc-rmain">' +
-          '<div class="hc-ico">' + ic(iconFor(c)) + '</div><div class="hc-rt"><div class="hc-rn">' + esc(c.name) + '</div><div class="hc-rs">' + esc(c.room) + ' \u00b7 <span class="d">' + esc(c.detail) + '</span></div></div></' + me + '>' +
-          '<button type="button" class="hc-do" data-do="' + esc(c.entity_id) + '" data-s="' + st + '" data-focus="d-' + esc(c.entity_id) + '"' + (st === 'busy' ? ' disabled' : '') + '>' + lab + '</button></div>';
-      }
-      const tagN = tap ? 'button type="button"' : 'div', end = tap ? 'button' : 'div';
-      return '<' + tagN + ' class="hc-row" data-lv="' + c.lv + '"' + (tap ? (panel ? ' data-alarm="1"' : ' data-entity="' + esc(c.entity_id) + '"') + ' data-focus="r-' + esc(c.entity_id) + '"' : '') + '>' +
+      // The rows of the main card are informational only: no tap, no entity dialog, no commands.
+      return '<div class="hc-row" data-lv="' + c.lv + '">' +
         '<div class="hc-ico">' + ic(iconFor(c)) + '</div><div class="hc-rt"><div class="hc-rn">' + esc(c.name) + '</div><div class="hc-rs">' + esc(c.room) + ' \u00b7 <span class="d">' + esc(c.detail) + '</span></div></div>' +
-        '<span class="hc-tag">' + TAG_TXT[c.lv] + '</span></' + end + '>';
+        '<span class="hc-tag">' + TAG_TXT[c.lv] + '</span></div>';
     }
     _actFor(c) {
       const a = ACT[c.kind];
@@ -725,6 +711,8 @@
         list += '<div class="hc-sim">' + ic('mdi:clock-outline') + '<span>' + (ss && ss.state === 'on' ? 'Simulazione presenza attiva' : (ss && (ss.state === 'unavailable' || ss.state === 'unknown') ? 'Simulazione presenza non verificabile' : 'Simulazione presenza non attiva')) + '</span></div>';
       }
       list += '</div>';
+      // Keep the card's height while its content is replaced, so the dashboard around it never shrinks and re-scrolls.
+      const h0 = root.offsetHeight; if (h0) root.style.minHeight = h0 + 'px';
       root.innerHTML = '<div class="hc" data-mode="' + this._mode() + '"><div class="hc-wrap"><div class="hc-shell">' +
         '<div class="hc-top' + (head ? '' : ' no-head') + '">' + (head ? '<div class="hc-head">' + head + '</div>' : '') + '<div class="hc-prof" role="group" aria-label="Profilo">' + profBtns + '</div></div>' +
         '<div class="hc-body">' +
@@ -743,6 +731,7 @@
         }
       }
       if (this._popup) this._lockScroll();
+      if (h0) window.requestAnimationFrame(() => { root.style.minHeight = ''; });
       if (want) { const el = root.querySelector('[data-focus="' + want + '"]'); if (el) el.focus({ preventScroll: true }); }
     }
 
@@ -909,7 +898,7 @@ button,input,select{font:inherit;color:inherit}
         this._checkHTML('cover-close', 'Tapparelle: pulsante Chiudi', 'Disattivato di default. Chiude la singola tapparella solo su tuo tocco.', n.cover_close) +
         this._checkHTML('alarm-panel', 'Pannello allarme', 'Un tocco sulla riga dell\u2019allarme apre il pannello con il pulsante. Il codice compare solo se l\u2019entit\u00e0 allarme ne ha uno impostato in Home Assistant; senza codice il pulsante comanda direttamente.', n.alarm_panel) +
         '<div class="heading">Interazione</div>' +
-        this._checkHTML('row-tap', 'Un tocco su una riga apre i dettagli', 'Apre i dettagli dell\u2019entit\u00e0 di Home Assistant.', n.row_tap) +
+        this._checkHTML('row-tap', 'Un tocco su una riga del popup apre i dettagli', 'Nel popup apre i dettagli dell\u2019entit\u00e0 di Home Assistant. Le righe della card principale sono solo informative.', n.row_tap) +
         '<div class="heading">Allarme</div><div class="desc">Esco segnala l\u2019allarme in casa da disattivare, Notte richiede \u00abinserito in casa\u00bb, Vacanza \u00abinserito fuori casa\u00bb.</div>' +
         this._fieldHTML('Allarme (alarm_control_panel)', '<div data-slot="alarm"></div>') +
         '<div class="heading">Vacanza</div>' +
