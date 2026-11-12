@@ -1,5 +1,5 @@
 /**
- * Home Check Card — Home Assistant dashboard card. Version 1.3
+ * Home Check Card — Home Assistant dashboard card. Version 1.4
  * Copyright (c) 2026 luigi-regolo. SPDX-License-Identifier: GPL-3.0-only.
  * Quick actions are optional: turn off lights, TVs and plugs, close covers, arm or disarm the alarm with a code. Locks are never commanded.
  * No external scripts, fonts, analytics or assets.
@@ -7,7 +7,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.3';
+  const VERSION = '1.4';
   const TAG = 'home-check-card';
   const EDITOR_TAG = 'home-check-card-editor';
 
@@ -314,6 +314,11 @@
 .hc button.hc-row{cursor:pointer}
 .hc button.hc-row:hover{border-color:color-mix(in srgb,var(--hc-accent) 45%,var(--hc-line))}
 .hc-ico{width:32px;height:32px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--hc-circle);--is:18px}
+.hc-row{min-height:50px;box-sizing:border-box}
+.hc-ph{visibility:hidden;pointer-events:none}
+.hc-ract{padding:6px 8px 6px 10px}
+.hc-rmain{display:flex;flex:1;align-items:center;gap:10px;min-width:0;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left}
+.hc button.hc-rmain{cursor:pointer}
 .hc-row[data-lv="warn"] .hc-ico{background:var(--hc-warn-bg);box-shadow:inset 0 0 0 1px var(--hc-warn-bd);color:var(--hc-warn-fg)}
 .hc-row[data-lv="crit"] .hc-ico{background:var(--hc-crit-bg);box-shadow:inset 0 0 0 1px var(--hc-crit-bd);color:var(--hc-crit-fg)}
 .hc-row[data-lv="unk"] .hc-ico{border:1.5px dashed var(--hc-idle);color:var(--hc-muted)}
@@ -427,7 +432,6 @@
       this._profile = 'esco'; this._compact = true;
       this._popup = false; this._view = 'list'; this._code = ''; this._pend = {}; this._confirm = false; this._alarmBusy = false; this._alarmErr = ''; this._aconf = false;
       this._filter = 'all'; this._room = null; this._ret = 'open'; this._focus = '';
-      this._prevOverflow = null;
       this._onKey = (e) => this._key(e);
       this._onResize = () => { this._applyLayout(); if (this._popup && this._colCount() !== this._cols) this._render(); };
       this._timer = null; this._ro = null;
@@ -477,7 +481,6 @@
       document.removeEventListener('keydown', this._onKey, true);
       if (this._timer) window.clearInterval(this._timer);
       if (this._ro) this._ro.disconnect();
-      this._unlock();
     }
 
     _applyLayout() {
@@ -512,6 +515,15 @@
     _rowHTML(c) {
       const panel = c.kind === 'alarm' && this._cfg.alarm_panel && c.entity_id;
       const tap = panel || (this._cfg.row_tap && c.entity_id);
+      const act = this._actFor(c);
+      if (act) {
+        const st = this._pend[c.entity_id] || '';
+        const lab = st === 'busy' ? 'Invio…' : st === 'fail' ? 'Riprova' : act.label;
+        const mt = tap ? 'button type="button" data-entity="' + esc(c.entity_id) + '" data-focus="r-' + esc(c.entity_id) + '"' : 'div', me = tap ? 'button' : 'div';
+        return '<div class="hc-row hc-ract" data-lv="' + c.lv + '"><' + mt + ' class="hc-rmain">' +
+          '<div class="hc-ico">' + ic(iconFor(c)) + '</div><div class="hc-rt"><div class="hc-rn">' + esc(c.name) + '</div><div class="hc-rs">' + esc(c.room) + ' \u00b7 <span class="d">' + esc(c.detail) + '</span></div></div></' + me + '>' +
+          '<button type="button" class="hc-do" data-do="' + esc(c.entity_id) + '" data-s="' + st + '" data-focus="d-' + esc(c.entity_id) + '"' + (st === 'busy' ? ' disabled' : '') + '>' + lab + '</button></div>';
+      }
       const tagN = tap ? 'button type="button"' : 'div', end = tap ? 'button' : 'div';
       return '<' + tagN + ' class="hc-row" data-lv="' + c.lv + '"' + (tap ? (panel ? ' data-alarm="1"' : ' data-entity="' + esc(c.entity_id) + '"') + ' data-focus="r-' + esc(c.entity_id) + '"' : '') + '>' +
         '<div class="hc-ico">' + ic(iconFor(c)) + '</div><div class="hc-rt"><div class="hc-rn">' + esc(c.name) + '</div><div class="hc-rs">' + esc(c.room) + ' \u00b7 <span class="d">' + esc(c.detail) + '</span></div></div>' +
@@ -661,7 +673,7 @@
     _openAlarm() {
       this._ret = 'r-' + this._cfg.alarm_entity; this._view = 'alarm'; this._code = ''; this._alarmErr = ''; this._aconf = false; this._alarmBusy = false;
       this._popup = true; this._focus = 'close';
-      this._lock(); document.addEventListener('keydown', this._onKey, true);
+      document.addEventListener('keydown', this._onKey, true);
       this._render();
     }
     _alarmGo(act) {
@@ -702,8 +714,12 @@
         (i > 0 ? '<i class="hc-sl"></i>' : '') + (i < D.rooms.length - 1 ? '<i class="hc-sr"></i>' : '') +
         '<span class="hc-node">' + ic(NODE_ICON[r.lv]) + '</span><span class="hc-sname">' + esc(r.name) + '</span><span class="hc-snote">' + esc(r.note) + '</span></button>').join('');
       let list = '<div class="hc-label">Da sistemare' + (D.items.length ? ' \u00b7 ' + D.items.length : '') + '</div><div class="hc-items">' + shown.map((c) => this._rowHTML(c)).join('');
+      const slots = Math.max(1, capRows), filled = shown.length + (D.items.length ? 0 : 1);
       if (more > 0) list += '<button type="button" class="hc-more" data-open="1" data-focus="more">+' + more + (more === 1 ? ' altra nel popup' : ' altre nel popup') + '</button>';
       if (!D.items.length) list += '<div class="hc-row hc-empty"><div class="hc-ico">' + ic(D.checks.length ? 'mdi:check' : 'mdi:minus') + '</div><div class="hc-rt"><div class="hc-rn">' + (D.checks.length ? 'Niente da sistemare' : 'Nessun controllo attivo') + '</div><div class="hc-rs" style="white-space:normal">' + (D.checks.length ? 'Tutti i controlli del profilo ' + esc(prof.label) + ' sono a posto' : 'Abilita una categoria nell\u2019editor') + '</div></div></div>';
+      for (let i = filled; i < slots; i++) list += '<div class="hc-row hc-ph" aria-hidden="true"></div>';
+      if (more <= 0) list += '<div class="hc-more hc-ph" aria-hidden="true">&nbsp;</div>';
+      if (this._profile !== 'vacanza' && cfg.simulation_entity) list += '<div class="hc-sim hc-ph" aria-hidden="true">' + ic('mdi:clock-outline') + '<span>Simulazione presenza non attiva</span></div>';
       if (this._profile === 'vacanza' && cfg.simulation_entity) {
         const ss = hass.states[cfg.simulation_entity];
         list += '<div class="hc-sim">' + ic('mdi:clock-outline') + '<span>' + (ss && ss.state === 'on' ? 'Simulazione presenza attiva' : (ss && (ss.state === 'unavailable' || ss.state === 'unknown') ? 'Simulazione presenza non verificabile' : 'Simulazione presenza non attiva')) + '</span></div>';
@@ -726,6 +742,7 @@
           this._room = null;
         }
       }
+      if (this._popup) this._lockScroll();
       if (want) { const el = root.querySelector('[data-focus="' + want + '"]'); if (el) el.focus({ preventScroll: true }); }
     }
 
@@ -756,16 +773,26 @@
     }
     _openPopup(room, ret) {
       this._ret = ret || 'open'; this._popup = true; this._view = 'list'; this._confirm = false; this._filter = compute(this._hass, this._cfg, this._profile).items.length ? 'bad' : 'all'; this._room = room; this._focus = 'close';
-      this._lock(); document.addEventListener('keydown', this._onKey, true);
+      document.addEventListener('keydown', this._onKey, true);
       this._render();
     }
     _closePopup(silent) {
       if (!this._popup) return;
-      this._popup = false; this._view = 'list'; this._code = ''; this._alarmErr = ''; this._aconf = false; this._confirm = false; document.removeEventListener('keydown', this._onKey, true); this._unlock();
+      this._popup = false; this._view = 'list'; this._code = ''; this._alarmErr = ''; this._aconf = false; this._confirm = false; document.removeEventListener('keydown', this._onKey, true);
       this._focus = silent ? '' : this._ret; this._render();
     }
-    _lock() { if (this._prevOverflow === null) { this._prevOverflow = document.documentElement.style.overflow || ''; document.documentElement.style.overflow = 'hidden'; } }
-    _unlock() { if (this._prevOverflow !== null) { document.documentElement.style.overflow = this._prevOverflow; this._prevOverflow = null; } }
+    // While the popup is open the dashboard behind must not move: the page is never restyled,
+    // scroll gestures that would leave the dialog body are simply cancelled.
+    _lockScroll() {
+      const overlay = this._root.querySelector('.hc-backdrop');
+      if (!overlay) return;
+      const body = overlay.querySelector('.hc-mbody');
+      const atEdge = (dy) => !body || (dy < 0 && body.scrollTop <= 0) || (dy > 0 && body.scrollTop + body.clientHeight >= body.scrollHeight - 1);
+      overlay.addEventListener('wheel', (e) => { if (!body || !body.contains(e.target) || atEdge(e.deltaY)) e.preventDefault(); }, { passive: false });
+      let y = 0;
+      overlay.addEventListener('touchstart', (e) => { const t = e.touches[0]; y = t ? t.clientY : 0; }, { passive: true });
+      overlay.addEventListener('touchmove', (e) => { const t = e.touches[0], dy = y - (t ? t.clientY : y); if (!body || !body.contains(e.target) || atEdge(dy)) e.preventDefault(); }, { passive: false });
+    }
     _key(e) {
       if (!this._popup) return;
       if (e.key === 'Escape') { e.stopPropagation(); this._closePopup(); return; }
