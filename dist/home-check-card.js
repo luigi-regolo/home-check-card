@@ -1,13 +1,13 @@
 /**
- * Home Check Card — Home Assistant dashboard card. Version 1.2
+ * Home Check Card — Home Assistant dashboard card. Version 1.3
  * Copyright (c) 2026 luigi-regolo. SPDX-License-Identifier: GPL-3.0-only.
- * Read-only: the card never sends commands.
+ * Quick actions are optional: turn off lights, TVs and plugs, close covers, arm or disarm the alarm with a code. Locks are never commanded.
  * No external scripts, fonts, analytics or assets.
  */
 (() => {
   'use strict';
 
-  const VERSION = '1.2';
+  const VERSION = '1.3';
   const TAG = 'home-check-card';
   const EDITOR_TAG = 'home-check-card-editor';
 
@@ -20,7 +20,7 @@
     cover:  { label: 'Tapparelle',        help: 'Tapparelle e tende non chiuse.',                      icon: 'mdi:blinds-horizontal' },
     plug:   { label: 'Prese',             help: 'Prese (switch di tipo presa) accese.',                icon: 'mdi:power-plug' },
     leak:   { label: 'Perdite',           help: 'Sensori di perdita acqua.',                           icon: 'mdi:water-alert' },
-    alarm:  { label: 'Allarme',           help: 'Sola lettura. Esco: segnala l\u2019allarme in casa da disattivare. Notte: richiede \u00abin casa\u00bb. Vacanza: richiede \u00abfuori casa\u00bb.', icon: 'mdi:shield-check' }
+    alarm:  { label: 'Allarme',           help: 'Esco: segnala l\u2019allarme in casa da disattivare. Notte: richiede \u00abin casa\u00bb. Vacanza: richiede \u00abfuori casa\u00bb.', icon: 'mdi:shield-check' }
   };
   const KIND_ORDER = ['door', 'window', 'light', 'tv', 'cover', 'plug', 'leak', 'alarm'];
   const PROFILES = {
@@ -36,11 +36,20 @@
   };
   const DEFAULTS = {
     eyebrow: 'HOME CHECK CARD', title: 'Controllo casa', show_eyebrow: true, show_title: true,
-    theme_mode: 'auto', max_rows: 2, row_tap: true, default_profile: 'esco'
+    theme_mode: 'auto', max_rows: 2, row_tap: true, default_profile: 'esco',
+    row_actions: true, bulk_action: true, cover_close: false, alarm_panel: true
   };
   const LV_HEAD = { ok: 'Tutto a posto', warn: 'Da sistemare', crit: 'Critico', unk: 'Non verificabile', none: 'Nessun controllo' };
   const NODE_ICON = { ok: 'mdi:check', warn: 'mdi:alert', crit: 'mdi:alert', unk: 'mdi:help', none: 'mdi:minus' };
   const TAG_TXT = { warn: 'Da sistemare', crit: 'Critico', unk: 'Non verificabile' };
+  const ACT = {
+    light: { dom: 'light', svc: 'turn_off', label: 'Spegni' },
+    tv: { dom: 'media_player', svc: 'turn_off', label: 'Spegni' },
+    plug: { dom: 'switch', svc: 'turn_off', label: 'Spegni' },
+    cover: { dom: 'cover', svc: 'close_cover', label: 'Chiudi' }
+  };
+  const ALARM_BTN = { esco: 'Disattiva allarme', notte: 'Inserisci in casa', vacanza: 'Inserisci fuori casa' };
+  const ALARM_REQ = { esco: 'Disinserito', notte: 'Inserito in casa', vacanza: 'Inserito fuori casa' };
   const RANK = { ok: 0, none: 0, unk: 1, warn: 2, crit: 3 };
   const IS_PHONE = Math.min(window.screen ? window.screen.width : 9999, window.screen ? window.screen.height : 9999) < 600;
 
@@ -61,6 +70,10 @@
     c.show_eyebrow = c.show_eyebrow !== false;
     c.show_title = c.show_title !== false;
     c.row_tap = c.row_tap !== false;
+    c.row_actions = c.row_actions !== false;
+    c.bulk_action = c.bulk_action !== false;
+    c.cover_close = c.cover_close === true;
+    c.alarm_panel = c.alarm_panel !== false;
     if (PROFILE_IDS.indexOf(c.default_profile) < 0) c.default_profile = 'esco';
     c.excluded = Array.isArray(raw.excluded) ? raw.excluded.filter((x) => typeof x === 'string') : [];
     c.rooms = Array.isArray(raw.rooms)
@@ -346,7 +359,8 @@
 .hc-dialog{width:min(390px,100%);max-width:100%;min-width:0;align-self:center;height:min(calc(100vh - 40px),680px);height:min(calc(100dvh - 40px),680px);display:flex;flex-direction:column;background:var(--hc-bg);color:var(--hc-fg);border:1px solid var(--hc-line);border-radius:26px;overflow:hidden;box-shadow:0 18px 60px #0005}
 .hc-mhead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 16px 12px 18px;background:var(--hc-bg);border-bottom:1px solid var(--hc-line)}
 .hc-mtitle{flex:1;min-width:0;margin:0;font-size:17px;font-weight:600;line-height:1.3}
-.hc .hc-close{display:flex;justify-content:center;align-items:center;line-height:0;margin:0;width:40px;height:40px;padding:0;flex:none;border:1px solid var(--hc-line);border-radius:50%;background:var(--hc-tile);color:var(--hc-fg);--is:18px}
+.hc .hc-close{display:grid;place-items:center;line-height:0;margin:0;padding:0;width:40px;height:40px;flex:none;border:1px solid var(--hc-line);border-radius:50%;background:var(--hc-tile);color:var(--hc-fg)}
+.hc .hc-close ha-icon{display:block;flex:none;margin:0;--mdc-icon-size:18px;width:18px;height:18px}
 .hc-mbody{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px 18px 18px;min-width:0}
 .hc-psub{margin:2px 4px 12px;font-size:12px;color:var(--hc-muted)}
 .hc-pfilters{display:flex;gap:6px;margin-bottom:4px}
@@ -369,6 +383,33 @@
 .hc-metric[data-lv="warn"] strong{color:var(--hc-warn-fg)}.hc-metric[data-lv="crit"] strong{color:var(--hc-crit-text)}
 :host([data-popup="wide"]) .hc-dialog{width:min(1120px,100%);height:min(80vh,560px);height:min(80dvh,560px)}
 :host([data-popup="wide"]) .hc-mbody{padding:12px 22px 22px}
+.hc-metric.hc-act{padding:8px 8px 8px 14px}
+.hc-act strong{white-space:nowrap}
+.hc-act .m-l{overflow:hidden}
+.hc-mmain{display:flex;flex:1;min-width:0;justify-content:space-between;align-items:center;gap:12px;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left}
+.hc button.hc-mmain{cursor:pointer}
+.hc .hc-do{flex:none;min-height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--hc-line);background:var(--hc-bg);color:var(--hc-fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.hc .hc-do[disabled]{color:var(--hc-muted);cursor:default}
+.hc .hc-do[data-s="fail"]{border-color:var(--hc-crit-text);color:var(--hc-crit-text)}
+.hc .hc-all{display:block;width:100%;margin:16px 0 2px;min-height:40px;border-radius:999px;border:1px solid var(--hc-line);background:var(--hc-tile);color:var(--hc-fg);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.hc .hc-all[data-s="confirm"]{border-color:var(--hc-warn-bd);background:var(--hc-warn-bg);color:var(--hc-warn-fg)}
+.hc-abig{display:flex;align-items:center;gap:12px;margin:4px 0 12px;padding:14px;border-radius:24px;background:var(--hc-tile);border:1px solid var(--hc-line)}
+.hc-aorb{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:50%;--is:24px;background:var(--hc-tile);border:2px solid var(--hc-idle);color:var(--hc-muted)}
+.hc-abig[data-lv="ok"] .hc-aorb{background:var(--hc-accent);border-color:var(--hc-accent);color:#fff}
+.hc-abig[data-lv="warn"] .hc-aorb{background:var(--hc-warn-bg);border-color:var(--hc-warn-bd);color:var(--hc-warn-fg)}
+.hc-abig[data-lv="crit"] .hc-aorb{background:var(--hc-crit-bg);border-color:var(--hc-crit-bd);color:var(--hc-crit-fg)}
+.hc-ast{display:flex;gap:8px;margin:0 0 14px}
+.hc-ast>div{flex:1;min-width:0;padding:10px 12px;border-radius:16px;background:var(--hc-tile);border:1px solid var(--hc-line)}
+.hc-ast span{display:block;font-size:11px;color:var(--hc-muted)}.hc-ast b{display:block;margin-top:3px;font-size:13px;font-weight:600}
+.hc-adots{display:flex;gap:10px;justify-content:center;margin:2px 0 10px}
+.hc-adots i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--hc-muted)}.hc-adots i.f{background:var(--hc-fg);border-color:var(--hc-fg)}
+.hc-akeys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 12px}
+.hc-akeys button{min-height:46px;border-radius:14px;border:1px solid var(--hc-line);background:var(--hc-tile);color:var(--hc-fg);font:inherit;font-size:17px;font-weight:600;cursor:pointer}
+.hc-akeys button ha-icon{--mdc-icon-size:20px;width:20px;height:20px}
+.hc-code{width:100%;box-sizing:border-box;min-height:44px;margin:0 0 12px;padding:0 14px;border-radius:14px;border:1px solid var(--hc-line);background:var(--hc-tile);color:var(--hc-fg);font:inherit;font-size:16px}
+.hc-amsg{margin:0 4px 12px;font-size:12px;color:var(--hc-muted)}.hc-amsg[role="alert"]{color:var(--hc-crit-text);font-weight:600}
+.hc .hc-acta{display:block;width:100%;min-height:44px;border-radius:999px;border:0;background:var(--hc-accent);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.hc .hc-acta[disabled]{opacity:.45;cursor:default}
 .hc-cols{display:grid;grid-template-columns:repeat(var(--n,1),minmax(0,1fr));column-gap:18px;align-items:start}
 .hc-col{min-width:0}
 .hc-col>.hc-rh:first-child{margin-top:4px}
@@ -384,12 +425,14 @@
       this._root = this.shadowRoot.getElementById('r');
       this._cfg = null; this._hass = null; this._sig = null;
       this._profile = 'esco'; this._compact = true;
-      this._popup = false; this._filter = 'all'; this._room = null; this._ret = 'open'; this._focus = '';
+      this._popup = false; this._view = 'list'; this._code = ''; this._pend = {}; this._confirm = false; this._alarmBusy = false; this._alarmErr = ''; this._aconf = false;
+      this._filter = 'all'; this._room = null; this._ret = 'open'; this._focus = '';
       this._prevOverflow = null;
       this._onKey = (e) => this._key(e);
       this._onResize = () => { this._applyLayout(); if (this._popup && this._colCount() !== this._cols) this._render(); };
       this._timer = null; this._ro = null;
       this.shadowRoot.addEventListener('click', (e) => this._click(e));
+      this.shadowRoot.addEventListener('input', (e) => { const t = e.target; if (t && t.dataset && t.dataset.code) { this._code = t.value; this._alarmErr = ''; const go = this._root.querySelector('.hc-acta'); if (go) go.disabled = !this._code || this._alarmBusy; } });
     }
 
     static getStubConfig() { return {}; }
@@ -455,6 +498,7 @@
       discover(h).forEach((t) => { const s = h.states[t.entity_id]; parts.push(t.entity_id + ':' + (s ? s.state : '-')); });
       if (c.alarm_entity) { const s = h.states[c.alarm_entity]; parts.push('A:' + (s ? s.state : '-')); }
       if (c.simulation_entity) { const s = h.states[c.simulation_entity]; parts.push('S:' + (s ? s.state : '-')); }
+      parts.push('P:' + JSON.stringify(this._pend || {}));
       return parts.join('|');
     }
 
@@ -466,22 +510,39 @@
 
     /* ---- markup ---- */
     _rowHTML(c) {
-      const tap = this._cfg.row_tap && c.entity_id;
+      const panel = c.kind === 'alarm' && this._cfg.alarm_panel && c.entity_id;
+      const tap = panel || (this._cfg.row_tap && c.entity_id);
       const tagN = tap ? 'button type="button"' : 'div', end = tap ? 'button' : 'div';
-      return '<' + tagN + ' class="hc-row" data-lv="' + c.lv + '"' + (tap ? ' data-entity="' + esc(c.entity_id) + '" data-focus="r-' + esc(c.entity_id) + '"' : '') + '>' +
+      return '<' + tagN + ' class="hc-row" data-lv="' + c.lv + '"' + (tap ? (panel ? ' data-alarm="1"' : ' data-entity="' + esc(c.entity_id) + '"') + ' data-focus="r-' + esc(c.entity_id) + '"' : '') + '>' +
         '<div class="hc-ico">' + ic(iconFor(c)) + '</div><div class="hc-rt"><div class="hc-rn">' + esc(c.name) + '</div><div class="hc-rs">' + esc(c.room) + ' \u00b7 <span class="d">' + esc(c.detail) + '</span></div></div>' +
         '<span class="hc-tag">' + TAG_TXT[c.lv] + '</span></' + end + '>';
+    }
+    _actFor(c) {
+      const a = ACT[c.kind];
+      if (!a || !this._cfg.row_actions || c.lv !== 'warn' || !c.entity_id || c.entity_id.indexOf(a.dom + '.') !== 0) return null;
+      if (c.kind === 'cover' && !this._cfg.cover_close) return null;
+      return a;
     }
     _metricHTML(c) {
       const tap = this._cfg.row_tap && c.entity_id;
       const inner = '<span class="m-l"><i class="m-g">' + ic(NODE_ICON[c.lv]) + '</i>' + esc(c.name) + '</span><strong>' + esc(cap(c.detail)) + '</strong>';
+      const act = this._actFor(c);
+      if (act) {
+        const st = this._pend[c.entity_id] || '';
+        const lab = st === 'busy' ? 'Invio…' : st === 'fail' ? 'Riprova' : act.label;
+        return '<div class="hc-metric hc-act" data-lv="' + c.lv + '">' +
+          (tap ? '<button type="button" class="hc-mmain" data-more="' + esc(c.entity_id) + '">' + inner + '</button>' : '<div class="hc-mmain">' + inner + '</div>') +
+          '<button type="button" class="hc-do" data-do="' + esc(c.entity_id) + '" data-s="' + st + '" data-focus="d-' + esc(c.entity_id) + '"' + (st === 'busy' ? ' disabled' : '') + '>' + lab + '</button></div>';
+      }
+      if (c.kind === 'alarm' && this._cfg.alarm_panel && c.entity_id) return '<button type="button" class="hc-metric" data-lv="' + c.lv + '" data-alarm="1">' + inner + '</button>';
       return tap ? '<button type="button" class="hc-metric" data-lv="' + c.lv + '" data-more="' + esc(c.entity_id) + '">' + inner + '</button>'
                  : '<div class="hc-metric" data-lv="' + c.lv + '">' + inner + '</div>';
     }
     _popupHTML(D, prof) {
+      if (this._view === 'alarm') return this._alarmHTML(prof);
       const f = this._filter;
       let body = '<div class="hc-psub">Profilo ' + esc(prof.label) + '</div><div class="hc-pfilters" role="group" aria-label="Filtro controlli">' +
-        [['all', 'Tutti'], ['bad', 'Da sistemare']].map((a) => '<button type="button" class="hc-chip" data-filter="' + a[0] + '" data-focus="f-' + a[0] + '" aria-pressed="' + (f === a[0]) + '">' + a[1] + '</button>').join('') + '</div>';
+        [['bad', 'Da sistemare'], ['all', 'Tutti']].map((a) => '<button type="button" class="hc-chip" data-filter="' + a[0] + '" data-focus="f-' + a[0] + '" aria-pressed="' + (f === a[0]) + '">' + a[1] + '</button>').join('') + '</div>';
       const blocks = [];
       const mkHead = (key, name, lv, cont) => '<div class="hc-rh"' + (cont ? '' : ' data-room-h="' + esc(key) + '"') + '><span>' + esc(name) + (cont ? ' · segue' : '') + '</span>' + (cont ? '' : '<em data-lv="' + lv + '">' + LV_HEAD[lv] + '</em>') + '</div>';
       if (D.house.length) {
@@ -534,9 +595,89 @@
       });
       body += '<div class="hc-cols" style="--n:' + N + '">' + (blocks.length ? cols.map((h) => '<div class="hc-col">' + h + '</div>').join('') : '<div class="hc-col"><div class="hc-metric"><span class="m-l">' + (f === 'bad' ? 'Niente da sistemare' : 'Nessuna stanza configurata') + '</span></div></div>');
       body += '</div>';
+      const bulk = this._cfg.bulk_action ? D.items.filter((c) => c.kind !== 'cover' && this._actFor(c)) : [];
+      if (bulk.length) {
+        const nn = bulk.length + ' entità';
+        body += '<button type="button" class="hc-all" data-all="1" data-focus="all" data-s="' + (this._confirm ? 'confirm' : '') + '">' + (this._confirm ? 'Conferma: spegni ' + nn : 'Spegni tutto · ' + nn) + '</button>';
+      }
       return '<div class="hc-backdrop" role="presentation"><div class="hc-dialog" role="dialog" aria-modal="true" aria-labelledby="hc-pt">' +
         '<div class="hc-mhead"><h3 class="hc-mtitle" id="hc-pt">Dettagli controllo</h3><button type="button" class="hc-close" data-close="1" data-focus="close" aria-label="Chiudi">' + ic('mdi:close') + '</button></div>' +
         '<div class="hc-mbody">' + body + '</div></div></div>';
+    }
+
+    _alarmHTML(prof) {
+      const id = this._cfg.alarm_entity, h = this._hass, st = h && h.states[id], s0 = st ? st.state : 'unavailable';
+      const attr = (st && st.attributes) || {}, pid = this._profile;
+      const ev = evalAlarm(s0, pid);
+      const triggered = s0 === 'triggered';
+      const act = triggered || pid === 'esco' ? 'disarm' : (pid === 'notte' ? 'arm_home' : 'arm_away');
+      const label = triggered ? ALARM_BTN.esco : ALARM_BTN[pid];
+      const lvIcon = ev.lv === 'ok' ? 'mdi:shield-check' : ev.lv === 'unk' ? 'mdi:shield-alert-outline' : 'mdi:shield-home';
+      let body = '<div class="hc-abig" data-lv="' + ev.lv + '"><span class="hc-aorb">' + ic(lvIcon) + '</span><div style="min-width:0"><div class="hc-vt">' + esc(cap(ev.detail.split(' · ')[0])) + '</div><div class="hc-vs">' + esc(ev.lv === 'warn' ? (pid === 'esco' ? 'Per uscire serve disattivarlo' : 'Non è nello stato richiesto') : ev.lv === 'ok' ? 'Già nello stato richiesto' : ev.lv === 'crit' ? 'Allarme scattato' : 'Nessun comando possibile') + '</div></div></div>';
+      body += '<div class="hc-ast"><div><span>Ora</span><b>' + esc(cap(ev.detail.split(' · ')[0])) + '</b></div><div><span>Richiesto in ' + esc(prof.label) + '</span><b>' + ALARM_REQ[pid] + '</b></div></div>';
+      const canAct = ev.lv !== 'unk' && (ev.lv !== 'ok' || triggered);
+      if (canAct) {
+        const hasCode = !!attr.code_format, text = attr.code_format === 'text';
+        const n = this._code.length;
+        if (hasCode) body += '<div class="hc-label">Codice richiesto</div>';
+        if (!hasCode) { /* nessun codice impostato sull'entità */ }
+        else if (text) {
+          body += '<input class="hc-code" type="password" autocomplete="off" aria-label="Codice allarme" data-code="1" data-focus="code" value="' + esc(this._code) + '">';
+        } else {
+          let dots = ''; for (let i = 0; i < Math.max(4, n); i++) dots += '<i' + (i < n ? ' class="f"' : '') + '></i>';
+          body += '<div class="hc-adots" aria-label="Cifre inserite: ' + n + '">' + dots + '</div><div class="hc-akeys">' +
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', '0', ''].map((k) => k === '' ? '<span></span>' : '<button type="button" data-key="' + k + '" data-focus="k-' + k + '" aria-label="' + (k === 'b' ? 'Cancella' : k) + '">' + (k === 'b' ? ic('mdi:backspace-outline') : k) + '</button>').join('') + '</div>';
+        }
+        if (this._alarmErr) body += '<div class="hc-amsg" role="alert">' + esc(this._alarmErr) + '</div>';
+        const dis = (hasCode && !n) || this._alarmBusy;
+        body += '<button type="button" class="hc-acta" data-alarm-go="' + act + '" data-focus="go"' + (dis ? ' disabled' : '') + '>' + (this._alarmBusy ? 'Invio…' : (this._aconf ? 'Conferma: ' + label.toLowerCase() : label)) + '</button>';
+      } else if (this._alarmErr) {
+        body += '<div class="hc-amsg" role="alert">' + esc(this._alarmErr) + '</div>';
+      }
+      return '<div class="hc-backdrop" role="presentation"><div class="hc-dialog" role="dialog" aria-modal="true" aria-labelledby="hc-pt">' +
+        '<div class="hc-mhead"><h3 class="hc-mtitle" id="hc-pt">Allarme</h3><button type="button" class="hc-close" data-close="1" data-focus="close" aria-label="Chiudi">' + ic('mdi:close') + '</button></div>' +
+        '<div class="hc-mbody">' + body + '</div></div></div>';
+    }
+    _doAction(id, noRender) {
+      const dom = id.split('.')[0], a = ACT[Object.keys(ACT).filter((k) => ACT[k].dom === dom)[0]];
+      if (!a || !this._hass || this._pend[id] === 'busy') return;
+      this._pend[id] = 'busy';
+      const fail = () => { if (this._pend[id] === 'busy') { this._pend[id] = 'fail'; this._render(); } };
+      try { Promise.resolve(this._hass.callService(a.dom, a.svc, { entity_id: id })).catch(fail); } catch (err) { fail(); }
+      window.setTimeout(fail, 8000);
+      if (!noRender) this._render();
+    }
+    _doAll() {
+      if (!this._confirm) {
+        this._confirm = true; this._focus = 'all'; this._render();
+        window.clearTimeout(this._confT); this._confT = window.setTimeout(() => { if (this._confirm) { this._confirm = false; this._render(); } }, 5000);
+        return;
+      }
+      this._confirm = false; window.clearTimeout(this._confT);
+      const D = compute(this._hass, this._cfg, this._profile);
+      D.items.filter((c) => c.kind !== 'cover' && this._actFor(c)).forEach((c) => this._doAction(c.entity_id, true));
+      this._focus = 'all'; this._render();
+    }
+    _openAlarm() {
+      this._ret = 'r-' + this._cfg.alarm_entity; this._view = 'alarm'; this._code = ''; this._alarmErr = ''; this._aconf = false; this._alarmBusy = false;
+      this._popup = true; this._focus = 'close';
+      this._lock(); document.addEventListener('keydown', this._onKey, true);
+      this._render();
+    }
+    _alarmGo(act) {
+      const stt = this._hass && this._hass.states[this._cfg.alarm_entity], need = !!(stt && stt.attributes && stt.attributes.code_format);
+      if (this._alarmBusy || (need && !this._code)) return;
+      if (!need && act === 'disarm' && !this._aconf) {
+        this._aconf = true; this._focus = 'go'; this._render();
+        window.clearTimeout(this._aconfT); this._aconfT = window.setTimeout(() => { if (this._aconf) { this._aconf = false; this._render(); } }, 5000);
+        return;
+      }
+      this._aconf = false; window.clearTimeout(this._aconfT);
+      this._alarmBusy = true; this._alarmErr = ''; this._focus = 'go'; this._render();
+      const data = { entity_id: this._cfg.alarm_entity };
+      if (need) data.code = this._code;
+      const done = (ok) => { this._alarmBusy = false; if (ok) this._code = ''; else this._alarmErr = 'Codice errato o comando rifiutato.'; this._render(); };
+      try { Promise.resolve(this._hass.callService('alarm_control_panel', 'alarm_' + act, data)).then(() => done(true), () => done(false)); } catch (err) { done(false); }
     }
 
     _render() {
@@ -551,6 +692,7 @@
       if (!hass) { root.innerHTML = '<div class="hc" data-mode="' + this._mode() + '"><div class="hc-wrap"><div class="hc-shell"><div class="hc-psub">Caricamento\u2026</div></div></div></div>'; return; }
       const prof = PROFILES[this._profile];
       const D = compute(hass, cfg, this._profile), V = verdictOf(D, prof);
+      Object.keys(this._pend).forEach((k) => { const c = D.checks.filter((x) => x.entity_id === k)[0]; if (!c || c.lv === 'ok') delete this._pend[k]; });
       const capRows = this._compact ? Math.min(2, cfg.max_rows) : cfg.max_rows;
       const shown = D.items.slice(0, capRows), more = D.items.length - shown.length;
       const title = cleanTitle(cfg.title) || 'Controllo casa';
@@ -590,13 +732,18 @@
     /* ---- interaction ---- */
     _click(e) {
       if (e.target && e.target.classList && e.target.classList.contains('hc-backdrop')) { this._closePopup(); return; }
-      const t = e.target.closest ? e.target.closest('[data-profile],[data-open],[data-close],[data-filter],[data-area],[data-entity],[data-more]') : null;
+      const t = e.target.closest ? e.target.closest('[data-profile],[data-open],[data-close],[data-filter],[data-area],[data-entity],[data-more],[data-do],[data-all],[data-alarm],[data-key],[data-alarm-go]') : null;
       if (!t) return;
       if (t.dataset.profile) {
         this._profile = t.dataset.profile;
         try { window.localStorage.setItem('home-check-card:profile', this._profile); } catch (err) { /* storage unavailable */ }
         this._render(); return;
       }
+      if (t.dataset.do) { this._doAction(t.dataset.do); return; }
+      if (t.dataset.all) { this._doAll(); return; }
+      if (t.dataset.alarm) { this._openAlarm(); return; }
+      if (t.dataset.key) { const k = t.dataset.key; this._code = k === 'b' ? this._code.slice(0, -1) : (this._code.length < 12 ? this._code + k : this._code); this._alarmErr = ''; this._focus = 'k-' + k; this._render(); return; }
+      if (t.dataset.alarmGo) { this._alarmGo(t.dataset.alarmGo); return; }
       if (t.dataset.open) { this._openPopup(null, 'open'); return; }
       if (t.dataset.area) { this._openPopup(t.dataset.area, t.getAttribute('data-focus')); return; }
       if (t.dataset.entity) { this._moreInfo(t.dataset.entity); return; }
@@ -608,13 +755,13 @@
       this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: entityId }, bubbles: true, composed: true }));
     }
     _openPopup(room, ret) {
-      this._ret = ret || 'open'; this._popup = true; this._filter = 'all'; this._room = room; this._focus = 'close';
+      this._ret = ret || 'open'; this._popup = true; this._view = 'list'; this._confirm = false; this._filter = compute(this._hass, this._cfg, this._profile).items.length ? 'bad' : 'all'; this._room = room; this._focus = 'close';
       this._lock(); document.addEventListener('keydown', this._onKey, true);
       this._render();
     }
     _closePopup(silent) {
       if (!this._popup) return;
-      this._popup = false; document.removeEventListener('keydown', this._onKey, true); this._unlock();
+      this._popup = false; this._view = 'list'; this._code = ''; this._alarmErr = ''; this._aconf = false; this._confirm = false; document.removeEventListener('keydown', this._onKey, true); this._unlock();
       this._focus = silent ? '' : this._ret; this._render();
     }
     _lock() { if (this._prevOverflow === null) { this._prevOverflow = document.documentElement.style.overflow || ''; document.documentElement.style.overflow = 'hidden'; } }
@@ -729,9 +876,14 @@ button,input,select{font:inherit;color:inherit}
         this._fieldHTML('Righe da sistemare visibili (1\u20135)', '<input class="input" type="number" id="rows" min="1" max="5" value="' + n.max_rows + '">', 'Su smartphone la card ne mostra al massimo 2; le altre sono nel popup.');
     }
     _avanzate(n) {
-      return '<div class="heading">Interazione</div><div class="desc">La card \u00e8 in sola lettura: non comanda nessuna entit\u00e0.</div>' +
-        this._checkHTML('row-tap', 'Un tocco su una riga apre i dettagli', 'Apre i dettagli dell\u2019entit\u00e0 di Home Assistant, dove usi le card dedicate (luci, tapparelle, allarme).', n.row_tap) +
-        '<div class="heading">Allarme</div><div class="desc">Sola lettura. Esco segnala l\u2019allarme in casa da disattivare, Notte richiede \u00abinserito in casa\u00bb, Vacanza \u00abinserito fuori casa\u00bb. I comandi restano nella card dell\u2019allarme.</div>' +
+      return '<div class="heading">Azioni rapide</div><div class="desc">Dal popup puoi spegnere le entit\u00e0 da sistemare. Il pannello allarme chiede il codice se l\u2019entit\u00e0 ne ha uno impostato in Home Assistant. Le serrature non vengono mai comandate.</div>' +
+        this._checkHTML('row-actions', 'Azioni sulle righe', 'Pulsante Spegni per luci, TV e prese accese.', n.row_actions) +
+        this._checkHTML('bulk-action', 'Spegni tutto', 'Pulsante in fondo al popup, con conferma. Non include le tapparelle.', n.bulk_action) +
+        this._checkHTML('cover-close', 'Tapparelle: pulsante Chiudi', 'Disattivato di default. Chiude la singola tapparella solo su tuo tocco.', n.cover_close) +
+        this._checkHTML('alarm-panel', 'Pannello allarme', 'Un tocco sulla riga dell\u2019allarme apre il pannello con il pulsante. Il codice compare solo se l\u2019entit\u00e0 allarme ne ha uno impostato in Home Assistant; senza codice il pulsante comanda direttamente.', n.alarm_panel) +
+        '<div class="heading">Interazione</div>' +
+        this._checkHTML('row-tap', 'Un tocco su una riga apre i dettagli', 'Apre i dettagli dell\u2019entit\u00e0 di Home Assistant.', n.row_tap) +
+        '<div class="heading">Allarme</div><div class="desc">Esco segnala l\u2019allarme in casa da disattivare, Notte richiede \u00abinserito in casa\u00bb, Vacanza \u00abinserito fuori casa\u00bb.</div>' +
         this._fieldHTML('Allarme (alarm_control_panel)', '<div data-slot="alarm"></div>') +
         '<div class="heading">Vacanza</div>' +
         this._fieldHTML('Automazione simulazione presenza (facoltativa)', '<div data-slot="sim"></div>', 'La card ne mostra soltanto lo stato, non la esegue.') +
@@ -781,6 +933,10 @@ button,input,select{font:inherit;color:inherit}
       if (el.id === 'show-eyebrow') { c.show_eyebrow = el.checked; this._emit(c); return; }
       if (el.id === 'show-title') { c.show_title = el.checked; this._emit(c); return; }
       if (el.id === 'row-tap') { c.row_tap = el.checked; this._emit(c); return; }
+      if (el.id === 'row-actions') { c.row_actions = el.checked; this._emit(c); return; }
+      if (el.id === 'bulk-action') { c.bulk_action = el.checked; this._emit(c); return; }
+      if (el.id === 'cover-close') { c.cover_close = el.checked; this._emit(c); return; }
+      if (el.id === 'alarm-panel') { c.alarm_panel = el.checked; this._emit(c); return; }
       if (el.id === 'theme') { c.theme_mode = el.value; this._emit(c); return; }
       if (el.id === 'rows') { const v = Math.max(1, Math.min(5, parseInt(el.value, 10) || 2)); el.value = v; c.max_rows = v; this._emit(c); }
     }
@@ -795,7 +951,7 @@ button,input,select{font:inherit;color:inherit}
   if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, HomeCheckCardEditor);
   window.customCards = window.customCards || [];
   if (!window.customCards.some((c) => c.type === TAG)) {
-    window.customCards.push({ type: TAG, name: 'Home Check Card', description: 'Controllo unico per uscire di casa o andare a letto: stanze, profili Esco / Notte / Vacanza, sola lettura.', preview: true });
+    window.customCards.push({ type: TAG, name: 'Home Check Card', description: 'Controllo unico per uscire di casa o andare a letto: stanze, profili Esco / Notte / Vacanza e azioni rapide.', preview: true });
   }
   // eslint-disable-next-line no-console
   console.info('%c HOME-CHECK-CARD %c ' + VERSION + ' ', 'color:#fff;background:#0a7156;font-weight:700', 'color:#0a7156;background:#fff');
